@@ -229,4 +229,6 @@ Thumbs.db
 */modules/argo-cd/charts/values.yaml
 */modules/jenkins/values.yaml
 
+
 .terraform.lock.hcl
+
