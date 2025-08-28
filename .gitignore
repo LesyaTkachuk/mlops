@@ -1,4 +1,3 @@
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -230,4 +229,6 @@ Thumbs.db
 */modules/argo-cd/charts/values.yaml
 */modules/jenkins/values.yaml
 
+
 .terraform.lock.hcl
+
