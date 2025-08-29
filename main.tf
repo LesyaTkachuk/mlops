@@ -6,6 +6,21 @@ provider "aws" {
   }
 }
 
+# provider "kubernetes" {
+#     host                   = data.aws_eks_cluster.cluster.endpoint
+#     cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+#     token                  = data.aws_eks_cluster_auth.cluster.token
+# }
+
+# provider "helm" {
+#   kubernetes {
+#     host                   = data.aws_eks_cluster.cluster.endpoint
+#     cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+#     token                  = data.aws_eks_cluster_auth.cluster.token
+#   }
+# }
+
+
 
 module "vpc" {
   source                         = "./vpc"
@@ -38,4 +53,67 @@ module "eks" {
 
   depends_on = [module.vpc]
 
+}
+
+data "aws_eks_cluster" "eks" {
+  name       = var.cluster_name
+  depends_on = [module.eks]
+}
+
+data "aws_eks_cluster_auth" "eks" {
+  name       = var.cluster_name
+  depends_on = [module.eks]
+}
+
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.eks.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.eks.token
+}
+
+provider "helm" {
+  kubernetes = {
+    host                   = data.aws_eks_cluster.eks.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.eks.token
+  }
+}
+
+# Configure Kubernetes & Helm providers at the root using EKS outputs
+# provider "kubernetes" {
+#   host                   = module.eks.cluster_endpoint
+#   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+#   exec {
+#     api_version = "client.authentication.k8s.io/v1beta1"
+#     command     = "aws"
+#     args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+#   }
+# }
+
+# provider "helm" {
+#   kubernetes = {
+#     host                   = module.eks.cluster_endpoint
+#     cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+#     exec {
+#       api_version = "client.authentication.k8s.io/v1beta1"
+#       command     = "aws"
+#       args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+#     }
+#   }
+# }
+
+module "argocd" {
+  source                         = "./argocd"
+  region                         = var.region
+  cluster_name                   = var.cluster_name
+  argocd_namespace               = var.argocd_namespace
+  git_ssh_private_key_file       = var.git_ssh_private_key_file
+
+    # Pass the providers down
+  providers = {
+    kubernetes = kubernetes
+    helm       = helm
+  }
 }

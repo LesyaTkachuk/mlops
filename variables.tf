@@ -108,3 +108,14 @@ variable "gpu_min_capacity" {
   description = "Minimum number of instances in the GPU node group"
   type        = number
 }
+
+variable "argocd_namespace" {
+  description = "Namespace for ArgoCD"
+  type        = string
+}
+
+variable "git_ssh_private_key_file" {
+  description = "Path to the SSH private key file"
+  type        = string
+  
+}
