@@ -1,0 +1,137 @@
+# MinIO ArgoCD Application - Minimal Footprint
+#
+# k create secret generic minio-secret --from-literal=root-user=admin --from-literal=root-password=${MINIO_PASSWORD}
+#
+# k apply -f ./mlflow-infra/argo-apps/minio.yaml
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minio
+  namespace: argocd
+  labels:
+    app: minio
+    component: storage
+spec:
+  project: default
+  source:
+    repoURL: registry-1.docker.io/bitnamicharts
+    chart: minio
+    targetRevision: 17.0.21
+    helm:
+      values: |
+        # Minimal resource configuration
+        mode: standalone
+
+        # Authentication
+        auth:
+          existingSecret: "mlflow-secrets"
+          secretKeys:
+            rootUserKey: root-user
+            rootPasswordKey: root-password
+
+        # Minimal resource limits
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+        # Single replica for minimal footprint
+        statefulset:
+          replicaCount: 1
+
+        # Persistence - minimal storage
+        persistence:
+          enabled: true
+          storageClass: ""
+          size: 5Gi
+          accessModes:
+            - ReadWriteOnce
+
+        # Disable distributed mode components
+        provisioning:
+          enabled: false
+
+        # Service configuration
+        service:
+          type: LoadBalancer
+          ports:
+            api: 9000
+            console: 9001
+
+        # Ingress disabled for minimal setup
+        ingress:
+          enabled: false
+
+        # Console ingress disabled
+        consoleIngress:
+          enabled: false
+
+        # Disable metrics for minimal footprint
+        metrics:
+          serviceMonitor:
+            enabled: false
+
+        # Security context
+        containerSecurityContext:
+          enabled: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+              - ALL
+
+        podSecurityContext:
+          enabled: true
+          fsGroup: 1001
+          fsGroupChangePolicy: "OnRootMismatch"
+
+        # Node selector and tolerations
+        nodeSelector: {}
+        tolerations: []
+        affinity: {}
+
+        # Disable extra features for minimal footprint
+        extraEnvVars: []
+        extraVolumes: []
+        extraVolumeMounts: []
+
+        # Health checks with minimal intervals
+        livenessProbe:
+          enabled: true
+          initialDelaySeconds: 5
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+
+        readinessProbe:
+          enabled: true
+          initialDelaySeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        defaultBuckets: "mlflow"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
+  # Health check configuration
+  revisionHistoryLimit: 3

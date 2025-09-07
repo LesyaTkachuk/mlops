@@ -1,0 +1,136 @@
+# Prometheus Pushgateway ArgoCD Application
+# 
+# The Pushgateway is an intermediary service which allows ephemeral and batch jobs to expose their metrics to Prometheus.
+# It accepts metrics via HTTP PUT/POST and makes them available for Prometheus scraping.
+#
+# Usage:
+# k apply -f ./mlflow-infra/argo-apps/pushgateway.yaml
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-pushgateway
+  namespace: argocd
+  labels:
+    app: prometheus-pushgateway
+    component: monitoring
+spec:
+  project: cluster-addons
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-pushgateway
+    targetRevision: 3.4.1
+    helm:
+      values: |
+        replicaCount: 1
+        
+        # Image configuration
+        image:
+          repository: prom/pushgateway
+          tag: ""
+          pullPolicy: IfNotPresent
+        
+        # Service configuration
+        service:
+          type: LoadBalancer
+          port: 9091
+          targetPort: 9091
+          annotations: {}
+        
+        # Resource limits - minimal for cost efficiency
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        
+        # Security context
+        securityContext:
+          fsGroup: 65534
+          runAsGroup: 65534
+          runAsNonRoot: true
+          runAsUser: 65534
+        
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+        
+        # Persistence - disabled for ephemeral metrics
+        persistence:
+          enabled: false
+        
+        # ServiceMonitor for Prometheus scraping
+        serviceMonitor:
+          enabled: true
+          namespace: monitoring
+          interval: 30s
+          scrapeTimeout: 10s
+          additionalLabels:
+            release: monitoring
+          annotations: {}
+        
+        # Network policy
+        networkPolicy: {}
+
+        
+        # Ingress configuration - disabled for minimal setup
+        ingress:
+          enabled: false
+        
+        # Node selector and tolerations
+        nodeSelector: {}
+        tolerations: []
+        affinity: {}
+        
+        # Pod annotations
+        podAnnotations: {}
+        
+        # Pod labels
+        podLabels: {}
+        
+        # Liveness and readiness probes
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9091
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9091
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        
+        # Extra arguments for pushgateway
+        extraArgs: []
+        
+        # Extra environment variables
+        extraVars: []
+        
+        # Priority class
+        priorityClassName: ""
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    
+  # Health check configuration
+  revisionHistoryLimit: 3

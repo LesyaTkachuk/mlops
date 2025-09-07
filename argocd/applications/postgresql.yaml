@@ -1,0 +1,37 @@
+## source ./mlflow-infra/argo-apps/.env
+## k create namespace mlflow
+## k create secret generic postgresql-secret --from-literal=postgres-user=postgres --from-literal=postgres-password="${POSTGRES_PASSWORD}"
+## k apply -f ./mlflow-infra/argo-apps/postgresql.yaml
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgresql
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: registry-1.docker.io/bitnamicharts
+    chart: postgresql
+    targetRevision: 16.7.26
+    helm:
+      values: |
+        auth:
+          # Use the pre-created Secret
+          existingSecret: "mlflow-secrets"
+          secretKeys:
+            adminPasswordKey: postgres-password
+            userPasswordKey: db-password
+
+          username: mlflow
+          database: mlflow
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

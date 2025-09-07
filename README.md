@@ -121,19 +121,7 @@ kubectl -n argocd rollout restart deploy/argocd-server
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
 ```
 
-## 5. Add MLFlow application
-
-Download the whole MLFlow project from the [mlflow-infra repository](https://github.com/LesyaTkachuk/mlflow-infra). Then apply mlflow.yaml file to your cluster:
-
-```
-kubectl apply -f ../mlflow-infra/argocd-apps/mlflow.yaml
-```
-
-Now you can check the status of deployment in ArgoCD UI interface in "Applications" section.
-
-![argocd application](images/argocd-application.png)
-
-## 5.a. Optional Step. Cluster default storage class setup.
+## 4.b. Optional Step. Cluster default storage class setup.
 
 If you will get an error at pod initialization connected with cluster storage class, you have to setup default cluster storage class manually.
 For this apply sc.yaml manifest to your cluster:
@@ -160,7 +148,91 @@ kubectl annotate sc ebs-sc-gp3 storageclass.kubernetes.io/is-default-class="true
 kubectl annotate sc gp2 storageclass.kubernetes.io/is-default-class- || true
 ```
 
-## 6. MLflow launch
+## 5. Add Monitoring Tools (Prometheus, Grafana and PushGateway)
+
+- create project cluster-addons:
+
+```
+kubectl apply -f  ./argocd/applications/project.addons.yaml
+```
+
+- add Prometheus and Grafana using Prometheus helm chart:
+
+```
+kubectl apply -f ./argocd/applications/prom.yaml
+```
+
+- add PushGateway for sending metrics to Prometheus
+
+```
+kubectl apply -f  ./argocd/applications/pushgateway.yaml
+```
+
+- get all resources and services:
+
+```
+kubectl get all -n monitoring
+kubectl get svc -n monitoring
+```
+
+- get secrets to Graphana UI
+
+```
+kubectl get secret -n monitoring monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo
+```
+
+- forward Grafana port to local computer:
+
+```
+kubectl port-forward svc/monitoring-grafana 9092:80 -n monitoring
+```
+
+- Login to Grafana UI using username "admin" and obtained password (visit in browser [localhost:9092](localhost:9092))
+
+![grafana](images/grafana.png)
+
+- forward Prometheus port to local computer:
+
+```
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+```
+
+- Visit Prometheus UI following the next link [localhost:9090](localhost:9090)
+
+![alt text](images/prom_mlflow_acc.png)
+
+- forward Prometheus PushGateway port to local computer:
+
+```
+kubectl port-forward svc/prometheus-pushgateway 9091:9091 -n monitoring
+```
+
+- Visit Prometheus PushGateway UI following the next link [localhost:9091](localhost:9091)
+
+![alt text](images/pushgateway.png)
+
+## 6. Add MLFlow application
+
+- Add the Bitnami OCI Helm repo to Argo CD
+
+```
+kubectl apply -f ./argocd/applications/bitnami-oci.yaml
+```
+
+- Apply secrets, minio, postgres and mlflow applications to your cluster:
+
+```
+kubectl apply -f ./argocd/applications/mlflow-secrets.yaml
+kubectl apply -f ./argocd/applications/minio.yaml
+kubectl apply -f ./argocd/applications/postgresql.yaml
+kubectl apply -f ./argocd/applications/mlflow-community.yaml
+```
+
+Now you can check the status of deployment in ArgoCD UI interface in "Applications" section.
+
+![argocd applications](images/argocd_apps.png)
+
+## 5. MLflow launch
 
 - get MLFlow pods and services:
 
@@ -172,23 +244,75 @@ kubectl get svc -n mlflow
 - get MLFlow login credentials
 
 ```
-echo Username: $(kubectl get secret -n mlflow mlflow-tracking -o jsonpath="{ .data.admin-user }" | base64 -d)
-echo Password: $(kubectl get secret -n mlflow mlflow-tracking -o jsonpath="{.data.admin-password }" | base64 -d)
+echo Username: $(kubectl get secret -n mlflow mlflow-secrets -o jsonpath="{ .data.admin-username }" | base64 -d)
+echo Password: $(kubectl get secret -n mlflow mlflow-secrets -o jsonpath="{.data.admin-password }" | base64 -d)
 ```
-- forward MLFlow server port to local computer
+
+- set these secrets into .env file
+
+- forward MLFlow server port to local computer or visit direct LoadBalancer url (pointing http and correct port)
 
 ```
 kubectl port-forward svc/mlflow-tracking -n mlflow 3000:80
 ```
+
 - login to MLFlow UI
 
-Visit [localhost:3000](localhost:3000) in your browser and login to MLFlow UI using obtained in  previous step password and username 
+Visit [localhost:3000](localhost:3000) in your browser and login to MLFlow UI using obtained in previous step password and username
 
 ![mlflow ui](images/mlflow-ui.png)
 
 🎉 **Congrats! Your MLflow app is ready for models training and experiments tracking.**
 
+## 6. Train model
+
+- create and activate python environment
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+- install dependencies
+
+```
+pip install -r ./experiments/requirements.txt
+```
+
+- check if all necessary variables were set and secrets into .env file
+
+- apply .env variables
+
+```
+source ./.env
+```
+
+- run model training with different parameters, push metrics to Prometheus and Grafana and store model with the highest accuracy
+
+```
+python3 ./experiments/train_and_push.py
+```
+
+- open the url to MLFlow that appears in console. You can observe model training run with all details.
+  ![training results](images/training_console.png)
+  ![alt text](images/mlflow_training.png)
+
+- check if Prometheus PushGateway appears in Prometheus/Status/Target Heals endpoints list ([localhost:9090](localhost:9090))
+  ![alt text](images/prometheus.png)
+
+- Observe mlflow metrics in Grafana/Drilldown/Metrics and filter by "mlflow" name
+
+![grafana mlflow metrics](images/grafana_mlflow.png)
+
 ## Destroy resources
+
+Delete all argocd applications:
+
+```
+kubectl -n argocd delete application postgresql --ignore-not-found
+kubectl -n argocd delete application minio --ignore-not-found
+kubectl -n argocd delete application mlflow-community --ignore-not-found
+```
 
 ```bash
 terraform destroy

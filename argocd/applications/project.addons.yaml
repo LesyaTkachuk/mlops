@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: cluster-addons
+  namespace: argocd   # ArgoCD's namespace (where it is installed)
+spec:
+  description: Project for usefull cluster addons
+
+  # Git repos allowed for this project
+  sourceRepos:
+    - '*'
+
+  destinations:
+    - namespace: '*'
+      server: '*'
+
+  # Allow managing all cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Allow managing all namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

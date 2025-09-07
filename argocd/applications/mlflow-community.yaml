@@ -1,0 +1,86 @@
+# MLflow ArgoCD Application - Community Helm Chart
+# k create secret generic mlflow-admin-secret --from-literal=admin-username=admin --from-literal=admin-password=${MLFLOW_PASSWORD}
+# k apply -f ./mlflow-infra/argo-apps/mlflow-single.yaml
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlflow-community
+  namespace: argocd
+  labels:
+    app: mlflow
+    component: ml-platform
+spec:
+  project: default
+  source:
+    repoURL: https://community-charts.github.io/helm-charts
+    chart: mlflow
+    targetRevision: 1.6.2
+    helm:
+      values: |
+        replicaCount: 1
+        image:
+          repository: docker.io/burakince/mlflow
+          pullPolicy: IfNotPresent
+          tag: ""
+        service:
+          enabled: true
+          type: LoadBalancer
+          port: 80
+          name: http
+          containerPort: 5000
+          containerPortName: mlflow
+          annotations: {}
+        log:
+          enabled: true
+          level: info
+        telemetry:
+          enabled: false
+        backendStore:
+          databaseMigration: true
+          databaseConnectionCheck: true
+          postgres:
+            enabled: true
+            host: "postgresql"
+            port: 5432
+            database: "mlflow"
+            user: "postgres"
+            password: ""
+            driver: "psycopg2"
+          existingDatabaseSecret:
+            name: "mlflow-secrets"
+            usernameKey: "db-username"
+            passwordKey: "db-password"
+        artifactRoot:
+          s3:
+            enabled: true
+            bucket: "mlflow"
+            existingSecret:
+              name: "mlflow-secrets"
+              keyOfAccessKeyId: "root-user"
+              keyOfSecretAccessKey: "root-password"
+        auth:
+          enabled: true
+          existingAdminSecret:
+            name: "mlflow-secrets"
+            usernameKey: "admin-username"
+            passwordKey: "admin-password"
+        extraEnvVars:
+          MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+          MLFLOW_S3_IGNORE_TLS: "true"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    
+  # Health check configuration
+  revisionHistoryLimit: 3
