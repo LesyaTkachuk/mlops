@@ -21,9 +21,13 @@ cluster_version   = "1.28"
 cluster_admin_users = [
   "arn:aws:iam::371235828704:user/terraform-user"
 ]
-cpu_desired_capacity = 1
-cpu_max_capacity     = 2
+cpu_desired_capacity = 2
+cpu_max_capacity     = 6
 cpu_min_capacity     = 0
 gpu_desired_capacity = 0
 gpu_max_capacity     = 1
 gpu_min_capacity     = 0
+
+argocd_namespace = "argocd"
+
+git_ssh_private_key_file="~/.ssh/id_rsa"
