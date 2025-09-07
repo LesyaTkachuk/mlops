@@ -295,10 +295,11 @@ python3 ./experiments/train_and_push.py
 
 - open the url to MLFlow that appears in console. You can observe model training run with all details.
   ![training results](images/training_console.png)
-  ![alt text](images/mlflow_training.png)
+  ![mlflow dashboard](images/mlflow_training.png)
+  ![best model](images/mlflow_best_model.png)
 
 - check if Prometheus PushGateway appears in Prometheus/Status/Target Heals endpoints list ([localhost:9090](localhost:9090))
-  ![alt text](images/prometheus.png)
+  ![prometheus](images/prometheus.png)
 
 - Observe mlflow metrics in Grafana/Drilldown/Metrics and filter by "mlflow" name
 
